@@ -234,6 +234,7 @@ func (l *loadbalancers) UpdateLoadBalancer(ctx context.Context, clusterName stri
 			rebuildOpts = newNBCfg.GetRebuildOptions()
 		}
 
+		fmt.Println("-----", rebuildOpts)
 		rebuildOpts.Nodes = newNBNodes
 
 		if _, err = l.client.RebuildNodeBalancerConfig(ctx, lb.ID, currentNBCfg.ID, rebuildOpts); err != nil {

@@ -42,6 +42,10 @@ func TestCCMLoadBalancers(t *testing.T) {
 			f:    testUpdateLoadBalancerAddAnnotation,
 		},
 		{
+			name: "Update Load Balancer - Add Port Annotation",
+			f:    testUpdateLoadBalancerAddPortAnnotation,
+		},
+		{
 			name: "Update Load Balancer - Add Port",
 			f:    testUpdateLoadBalancerAddPort,
 		},
@@ -206,7 +210,7 @@ func testUpdateLoadBalancerAddAnnotation(t *testing.T, client *linodego.Client) 
 
 func testUpdateLoadBalancerAddPortAnnotation(t *testing.T, client *linodego.Client) {
 	targetTestPort := 80
-	portConfigAnnotation = fmt.Sprintf("%s-%i", annLinodePortConfigPrefix, targetTestPort)
+	portConfigAnnotation := fmt.Sprintf("%s-%d", annLinodePortConfigPrefix, targetTestPort)
 	svc := &v1.Service{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: randString(10),
@@ -249,6 +253,30 @@ func testUpdateLoadBalancerAddPortAnnotation(t *testing.T, client *linodego.Clie
 		t.Errorf("EnsureLoadBalancer returned an error: %s", err)
 	}
 
+	checkPortConfig := func(expectedPortConfigs map[int]string) {
+		lbName := cloudprovider.GetLoadBalancerName(svc)
+		nb, err := lb.lbByName(context.TODO(), lb.client, lbName)
+		if err != nil {
+			t.Errorf("lbByName returned error: %s", err)
+		}
+		cfgs, errConfigs := client.ListNodeBalancerConfigs(context.TODO(), nb.ID, nil)
+		if errConfigs != nil {
+			t.Errorf("error getting NodeBalancer configs: %v", errConfigs)
+		}
+		observedPortConfigs := make(map[int]string)
+
+		for _, cfg := range cfgs {
+			observedPortConfigs[int(cfg.Port)] = string(cfg.Protocol)
+		}
+
+		fmt.Println(">>>>>>>>>>", expectedPortConfigs, observedPortConfigs)
+
+		if !reflect.DeepEqual(expectedPortConfigs, observedPortConfigs) {
+			t.Errorf("NodeBalancer port mismatch: expected %v, got %v", expectedPortConfigs, observedPortConfigs)
+		}
+	}
+	checkPortConfig(map[int]string{80: "tcp"})
+
 	svc.ObjectMeta.SetAnnotations(map[string]string{
 		portConfigAnnotation: "http",
 	})
@@ -258,29 +286,7 @@ func testUpdateLoadBalancerAddPortAnnotation(t *testing.T, client *linodego.Clie
 		t.Errorf("UpdateLoadBalancer returned an error while updated annotations: %s", err)
 	}
 
-	lbName := cloudprovider.GetLoadBalancerName(svc)
-	nb, err := lb.lbByName(context.TODO(), lb.client, lbName)
-	if err != nil {
-		t.Errorf("unexpected error: %v", err)
-	}
-
-	cfgs, errConfigs := client.ListNodeBalancerConfigs(context.TODO(), nb.ID, nil)
-	if errConfigs != nil {
-		t.Errorf("error getting NodeBalancer configs: %v", errConfigs)
-	}
-
-	expectedPortConfigs := map[int]string{
-		80: "http",
-	}
-	observedPortConfigs := make(map[int]string)
-
-	for _, cfg := range cfgs {
-		observedPortConfigs[int(cfg.Port)] = string(cfg.Protocol)
-	}
-
-	if !reflect.DeepEqual(expectedPortConfigs, observedPortConfigs) {
-		t.Errorf("NodeBalancer port mismatch: expected %v, got %v", expectedPortConfigs, observedPortConfigs)
-	}
+	checkPortConfig(map[int]string{80: "http"})
 }
 
 func testUpdateLoadBalancerAddPort(t *testing.T, client *linodego.Client) {
